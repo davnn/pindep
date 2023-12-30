@@ -1,113 +1,137 @@
-import Image from 'next/image'
+"use client"
 
-export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
+import Link from "next/link"
+import React, {useState, ChangeEvent, useEffect} from "react";
+import * as semver from "semver";
+import {useBreakpoint} from "@/app/hooks";
+
+const Footer = (
+    <div key="footer"
+        className="flex flex-col sm:flex-row justify-between max-w-screen-xl mx-auto w-full text-sm text-gray-500 dark:text-gray-300 pt-5">
+        <p>A tool to help you correctly pin your dependencies according to <Link className="border-b-4"
+            href="https://semver.org/">Semantic
+            Versioning</Link>.</p>
+        <p className="pt-2 sm:pt-0"><Link className="border-b-4" href="https://github.com/davnn/pindep">View on
+            GitHub</Link>
         </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    </div>
+)
+
+
+const App: React.FC = () => {
+    const [inputValue, setInputValue] = useState<string>("");
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const isMobile = !useBreakpoint("sm")
+
+    useEffect(() => {
+        window.dispatchEvent(new Event("resize"));
+        setIsLoading(_ => false)
+    }, []);
+
+    let range = semver.validRange(inputValue);
+    let version = semver.coerce(inputValue);
+
+    range = range !== "<0.0.0" ? range : null // this should also be an invalid range, but isn't!
+    range = range ?? "*"
+    version = version ?? new semver.SemVer("1.0.0")
+
+    const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setInputValue(value);
+    };
+
+    const dec = (version: number) => Math.max(version - 1, 0)
+    const maxCandidates = [
+        new semver.SemVer(`${dec(version.major)}.${dec(version.minor)}.${dec(version.patch)}`),
+        new semver.SemVer(`${version.major}.${dec(version.minor)}.${dec(version.patch)}`),
+        new semver.SemVer(`${version.major}.${version.minor}.${dec(version.patch)}`),
+        version
+    ]
+    const maxVersion = semver.maxSatisfying(maxCandidates, range) ?? semver.minVersion(range) ?? new semver.SemVer("1.0.0");
+    const initial = maxVersion.version
+    const patchBump = maxVersion.inc("patch").version;
+    const minorBump = maxVersion.inc("minor").version;
+    const majorBump = maxVersion.inc("major").version;
+
+    const satisfyVersion = (v: string, range: string) => semver.satisfies(v, range) ? v : initial;
+    const satisfyText = (v: string, range: string) => semver.satisfies(v, range) ? "↑ upgrade" : "↔ keep";
+    const createItem = (v: string, range: string) => ({
+        name: `If ${v} comes out:`, value: satisfyVersion(v, range), unit: satisfyText(v, range)
+    })
+
+    const data = [
+        {name: "You have pinned:", value: range, unit: ""},
+        createItem(patchBump, range),
+        createItem(minorBump, range),
+        createItem(majorBump, range),
+    ]
+
+    const component = (
+        <div key="component" className="max-w-screen-xl mx-auto w-full">
+            <form>
+                <label htmlFor="default-search"
+                    className="mb-2 text-sm font-medium text-gray-900 sr-only dark:text-white">
+                    Explain
+                </label>
+                <div className="relative">
+                    <div className="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                        <svg
+                            className="w-4 h-4 text-gray-500 dark:text-gray-400"
+                            aria-hidden="true"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 20 20"
+                        >
+                            <path
+                                stroke="currentColor"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"
+                            />
+                        </svg>
+                    </div>
+                    <input
+                        type="search"
+                        id="default-search"
+                        className="block w-full p-4 ps-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                        placeholder={isMobile ? "Pin dependency (^1.0.0, ~1.0.0, ...)" : "Pin version or dependency (^1.0.0, ~1.0.0, ...)"}
+                        required
+                        value={inputValue}
+                        onChange={handleInputChange}
+                    />
+                </div>
+            </form>
+            <p className="p-3 text-slate-500 dark:text-slate-100">Assuming that you are currently using
+                version <b>{initial}</b> of a
+                dependency.</p>
+            <div className="dark:bg-gray-900 bg-gray-100">
+                <div className="mx-auto max-w-7xl">
+                    <div className="grid grid-cols-1 gap-px bg-white sm:grid-cols-2 lg:grid-cols-4">
+                        {data.map((stat) => (
+                            <div key={stat.name}
+                                className="flex flex-col min-h-40 dark:bg-gray-900 bg-gray-100 px-4 py-6 sm:px-6 lg:px-8 overflow-x-hidden">
+                                <p className="text-sm font-medium leading-6 dark:text-gray-400 text-gray-500 break-all">{stat.name}</p>
+                                <p className="mt-2 flex items-baseline gap-x-2">
+                                    <span
+                                        className="text-3xl sm:text-4xl font-semibold tracking-tight dark:text-white">{stat.value}</span>
+                                    {stat.unit ? <span
+                                        className="text-sm dark:text-gray-400 text-gray-500">{stat.unit}</span> : null}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
+    )
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+    return (
+        <main className="flex min-h-screen flex-col justify-between p-5 bg-white dark:bg-slate-800">
+            {isLoading ? "" : [component, Footer]}
+        </main>
+    );
+};
 
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
-}
+export default App;
